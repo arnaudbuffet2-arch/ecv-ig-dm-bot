@@ -266,9 +266,9 @@ def scan_comments(ig_id, token, state, dry_run):
                 continue
 
             now_iso = datetime.now(timezone.utc).isoformat()
-            state["processed_comments"][cid] = now_iso
 
             if KEYWORD not in comment.get("text", "").lower():
+                state["processed_comments"][cid] = now_iso
                 continue
 
             logging.debug("Mot-clé détecté dans : %s", comment)
@@ -277,17 +277,20 @@ def scan_comments(ig_id, token, state, dry_run):
             username = frm.get("username", "toi")
 
             if not user_id:
-                logging.warning("Commentaire sans user_id ignoré : %s", cid)
+                logging.warning("Commentaire sans user_id, sera retenté au prochain run : %s", cid)
                 logging.warning("Objet from complet : %s", frm)
                 continue
             if user_id == ig_id:
                 logging.debug("Commentaire du compte ECV lui-même, ignoré")
+                state["processed_comments"][cid] = now_iso
                 continue
             if user_id in state["sent_msg2"]:
                 logging.debug("@%s a déjà reçu MSG_2, ignoré", username)
+                state["processed_comments"][cid] = now_iso
                 continue
             if user_id in state["pending_follow"]:
                 logging.debug("@%s déjà en attente, ignoré", username)
+                state["processed_comments"][cid] = now_iso
                 continue
 
             reply = ig_reply_comment(cid, COMMENT_REPLY.format(username=username), token, dry_run)
@@ -300,6 +303,7 @@ def scan_comments(ig_id, token, state, dry_run):
                 ig_id, user_id, MSG_1_TEXT.format(username=username), token, dry_run,
                 quick_reply=MSG_1_QUICK_REPLY,
             )
+            state["processed_comments"][cid] = now_iso
             if "message_id" in result:
                 state["pending_follow"][user_id] = {"username": username, "sent_at": now_iso}
                 count += 1
