@@ -55,6 +55,8 @@ MSG_2_TEXT = (
 MSG_2_BUTTON_TITLE = "Voir la méthode 👉"
 MSG_2_BUTTON_URL   = "https://emilecoachvocal.com/prépare-ta-voix"
 
+COMMENT_REPLY = "Salut {username} ! 👋 Je t'envoie les infos par DM dans quelques minutes 📩"
+
 
 # ── State helpers ──────────────────────────────────────────────────────────────
 def load_config():
@@ -186,6 +188,19 @@ def ig_post_url_button(ig_id, recipient_id, text, button_title, button_url, toke
     return result
 
 
+def ig_reply_comment(comment_id, text, token, dry_run=False):
+    """Répond publiquement à un commentaire Instagram."""
+    if dry_run:
+        logging.info("[DRY RUN] Réponse commentaire %s : %.60s…", comment_id, text)
+        return {"id": "dry_run"}
+    resp = requests.post(
+        f"{BASE_URL}/{comment_id}/replies",
+        params={"message": text, "access_token": token},
+        timeout=15,
+    )
+    return resp.json()
+
+
 # ── Data fetching ──────────────────────────────────────────────────────────────
 def get_recent_posts(ig_id, token):
     """Retourne les IDs des posts publiés dans les POSTS_LOOKBACK_DAYS derniers jours."""
@@ -276,6 +291,8 @@ def scan_comments(ig_id, token, state, dry_run):
             if user_id in state["pending_follow"]:
                 logging.debug("@%s déjà en attente, ignoré", username)
                 continue
+
+            ig_reply_comment(cid, COMMENT_REPLY.format(username=username), token, dry_run)
 
             result = ig_post_msg(
                 ig_id, user_id, MSG_1_TEXT.format(username=username), token, dry_run,
