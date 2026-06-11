@@ -1,13 +1,11 @@
 """
-Instagram DM Bot ECV — Détecte "coaching" dans les commentaires, envoie un DM en 2 étapes.
-
-Étape 1 : demande à l'utilisateur de s'abonner, puis de confirmer.
-Étape 2 : envoie le lien de la méthode quand il répond "Je suis abonné(e)".
+CommentDM — ECV Instagram bot.
+Détecte "coaching" dans les commentaires → répond sous le commentaire + envoie le lien par DM.
 
 Usage:
-  python scripts/instagram_dm_bot.py            # exécution normale
-  python scripts/instagram_dm_bot.py --dry-run  # simulation (aucun DM envoyé)
-  python scripts/instagram_dm_bot.py --verbose  # logs détaillés
+  python instagram_dm_bot.py            # exécution normale
+  python instagram_dm_bot.py --dry-run  # simulation (aucun DM envoyé)
+  python instagram_dm_bot.py --verbose  # logs détaillés
 """
 
 import json
