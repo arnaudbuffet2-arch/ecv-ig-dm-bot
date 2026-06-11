@@ -292,7 +292,11 @@ def scan_comments(ig_id, token, state, dry_run):
                 logging.debug("@%s déjà en attente, ignoré", username)
                 continue
 
-            ig_reply_comment(cid, COMMENT_REPLY.format(username=username), token, dry_run)
+            reply = ig_reply_comment(cid, COMMENT_REPLY.format(username=username), token, dry_run)
+            if "id" in reply:
+                logging.info("Réponse commentaire → @%s", username)
+            else:
+                logging.warning("Erreur réponse commentaire → @%s : %s", username, reply.get("error", reply))
 
             result = ig_post_msg(
                 ig_id, user_id, MSG_1_TEXT.format(username=username), token, dry_run,
