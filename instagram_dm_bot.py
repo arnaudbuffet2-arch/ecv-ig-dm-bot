@@ -28,6 +28,7 @@ LOG_FILE             = Path(__file__).parent / "instagram_dm_bot.log"
 KEYWORD              = "coaching"
 POSTS_LOOKBACK_DAYS  = 7
 STATE_RETENTION_DAYS = 30
+TOKEN_REFRESH_DAYS   = 50  # Rafraîchir avant les 60 jours d'expiration
 SUBSCRIPTION_WORDS   = ("abonné", "abonnée", "abonne")
 
 # ── Messages ───────────────────────────────────────────────────────────────────
@@ -86,6 +87,37 @@ def purge_old_state(state):
     state["processed_comments"] = {
         k: v for k, v in state["processed_comments"].items() if v > cutoff
     }
+
+
+# ── Token refresh ──────────────────────────────────────────────────────────────
+def refresh_token_if_needed(token, state):
+    """Rafraîchit le token Instagram si proche de l'expiration (tous les 50 jours)."""
+    last_refresh = state.get("last_token_refresh")
+    if last_refresh:
+        days_since = (datetime.now(timezone.utc) - _parse_time(last_refresh)).days
+        if days_since < TOKEN_REFRESH_DAYS:
+            return token
+
+    resp = requests.get(
+        "https://graph.instagram.com/refresh_access_token",
+        params={"grant_type": "ig_refresh_token", "access_token": token},
+        timeout=15,
+    )
+    data = resp.json()
+    if "access_token" not in data:
+        logging.warning("Impossible de rafraîchir le token : %s", data.get("error"))
+        return token
+
+    new_token = data["access_token"]
+    state["last_token_refresh"] = datetime.now(timezone.utc).isoformat()
+    logging.info("Token Instagram rafraîchi (valide 60 jours supplémentaires)")
+
+    github_output = os.environ.get("GITHUB_OUTPUT")
+    if github_output:
+        with open(github_output, "a", encoding="utf-8") as f:
+            f.write(f"new_token={new_token}\n")
+
+    return new_token
 
 
 # ── API helpers ────────────────────────────────────────────────────────────────
@@ -334,6 +366,8 @@ def main():
     state = load_state()
 
     purge_old_state(state)
+    if not args.dry_run:
+        token = refresh_token_if_needed(token, state)
 
     if args.dry_run:
         logging.info("=== MODE DRY RUN — aucun DM ne sera envoyé ===")
