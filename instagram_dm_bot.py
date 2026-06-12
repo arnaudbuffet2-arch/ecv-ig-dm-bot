@@ -284,14 +284,6 @@ def scan_comments(ig_id, token, state, dry_run):
                 logging.debug("Commentaire du compte ECV lui-même, ignoré")
                 state["processed_comments"][cid] = now_iso
                 continue
-            if user_id in state["sent_msg2"]:
-                logging.debug("@%s a déjà reçu MSG_2, ignoré", username)
-                state["processed_comments"][cid] = now_iso
-                continue
-            if user_id in state["pending_follow"]:
-                logging.debug("@%s déjà en attente, ignoré", username)
-                state["processed_comments"][cid] = now_iso
-                continue
 
             reply = ig_reply_comment(cid, COMMENT_REPLY.format(username=username), token, dry_run)
             if "id" in reply:
