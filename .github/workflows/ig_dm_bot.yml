@@ -3,7 +3,7 @@ name: Instagram DM Bot
 on:
   schedule:
     - cron: "*/5 * * * *"   # toutes les 5 minutes
-  workflow_dispatch:          # déclenchement manuel possible
+  workflow_dispatch:          # declenchement manuel possible
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -37,7 +37,8 @@ jobs:
         if: steps.run_bot.outputs.new_token != ''
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
-        run: echo "${{ steps.run_bot.outputs.new_token }}" | gh secret set IG_ACCESS_TOKEN --repo ${{ github.repository }}
+          NEW_IG_TOKEN: ${{ steps.run_bot.outputs.new_token }}
+        run: printf '%s' "$NEW_IG_TOKEN" | gh secret set IG_ACCESS_TOKEN --repo ${{ github.repository }}
 
       - name: Save state
         run: |
