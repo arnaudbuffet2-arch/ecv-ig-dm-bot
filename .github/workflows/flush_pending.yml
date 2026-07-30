@@ -1,19 +1,14 @@
-name: Instagram DM Bot
+name: Flush pending_follow (one-off)
 
 on:
-  schedule:
-    - cron: "*/5 * * * *"   # toutes les 5 minutes
-  workflow_dispatch:          # declenchement manuel possible
+  workflow_dispatch:
 
 concurrency:
   group: ig-dm-bot
   cancel-in-progress: false
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
-  run-bot:
+  flush:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -30,25 +25,17 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
-      - name: Run bot
-        id: run_bot
+      - name: Flush pending_follow
         env:
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
-        run: python instagram_dm_bot.py
-
-      - name: Update token secret if refreshed
-        if: steps.run_bot.outputs.new_token != ''
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
-          NEW_IG_TOKEN: ${{ steps.run_bot.outputs.new_token }}
-        run: printf '%s' "$NEW_IG_TOKEN" | gh secret set IG_ACCESS_TOKEN --repo ${{ github.repository }}
+        run: python flush_pending_follow.py
 
       - name: Save state
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add instagram_dm_bot_state.json
-          git diff --cached --quiet || git commit -m "chore: update bot state"
+          git diff --cached --quiet || git commit -m "chore: flush pending_follow to sent_msg2"
           git pull --rebase origin main
           git push
