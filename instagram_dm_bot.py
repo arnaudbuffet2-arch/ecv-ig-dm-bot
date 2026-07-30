@@ -1,6 +1,6 @@
 """
 CommentDM — ECV Instagram bot.
-Détecte "coaching" dans les commentaires → répond sous le commentaire + envoie le lien par DM.
+Détecte "coaching" dans les commentaires → répond sous le commentaire + envoie directement le lien par DM.
 
 Usage:
   python instagram_dm_bot.py            # exécution normale
@@ -27,28 +27,14 @@ KEYWORD              = "coaching"
 POSTS_LOOKBACK_DAYS  = 7
 STATE_RETENTION_DAYS = 30
 TOKEN_REFRESH_DAYS   = 50  # Rafraîchir avant les 60 jours d'expiration
-SUBSCRIPTION_WORDS   = ("abonné", "abonnée", "abonne")
 
 # ── Messages ───────────────────────────────────────────────────────────────────
-MSG_1_TEXT = (
-    "Bonjour {username} 👋 merci pour ton commentaire !\n\n"
-    "Pour recevoir la ressource, tu dois être abonné(e) ✅\n\n"
-    "Ça me permet de m'assurer que tu la reçois bien.\n\n"
-    "Clique juste en dessous quand c'est fait :"
-)
-MSG_1_QUICK_REPLY = "Je suis abonné(e) ✅"
-
 MSG_2_TEXT = (
-    "Parfait 🙌 te voilà abonné(e) !\n\n"
-    "Tu as demandé le guide pour ta technique vocale 🎤\n\n"
-    "Après avoir accompagné des milliers de voix, il y a une chose que je répète toujours :\n\n"
-    "La technique s'installe avec les bons exercices, dans le bon ordre, "
-    "répétés jusqu'à devenir des réflexes naturels.\n\n"
-    "C'est pour ça que j'ai créé cette méthode ✨\n\n"
-    "Ma routine personnelle : préparer la voix, travailler les fondamentaux "
-    "et construire des automatismes séance après séance.\n\n"
-    "Plus besoin de te demander quoi travailler ni dans quel ordre avancer.\n\n"
-    "Tous les détails sont ici 👇"
+    "La technique vocale s'installe avec des exercices précis, ciblés, "
+    "à travailler régulièrement. Le but est de préparer la voix, mais aussi de la développer. "
+    "Ma routine personnelle te donnera un bagage technique nécessaire pour aborder "
+    "tous les répertoires et styles musicaux.\n\n"
+    "Bonne nouvelle, je te propose une réduction de 25 % cette méthode avec le code « GIFTEMILE »."
 )
 MSG_2_BUTTON_TITLE = "Voir la méthode 👉"
 MSG_2_BUTTON_URL   = "https://emilecoachvocal.com/prépare-ta-voix"
@@ -74,7 +60,7 @@ def load_state():
     if STATE_FILE.exists():
         with open(STATE_FILE, encoding="utf-8") as f:
             return json.load(f)
-    return {"processed_comments": {}, "pending_follow": {}, "sent_msg2": {}}
+    return {"processed_comments": {}, "sent_msg2": {}}
 
 
 def save_state(state):
@@ -126,24 +112,11 @@ def _parse_time(ts: str) -> datetime:
     return datetime.fromisoformat(normalized)
 
 
-def ig_get(path, params, token):
-    resp = requests.get(
-        f"{BASE_URL}/{path}",
-        params={**params, "access_token": token},
-        timeout=15,
-    )
-    return resp.json()
-
-
-def ig_post_msg(ig_id, recipient_id, text, token, dry_run=False, quick_reply=None):
+def ig_post_msg(ig_id, recipient_id, text, token, dry_run=False):
     if dry_run:
         logging.info("[DRY RUN] DM → %s : %.60s…", recipient_id, text)
         return {"message_id": "dry_run"}
     message = {"text": text}
-    if quick_reply:
-        message["quick_replies"] = [
-            {"content_type": "text", "title": quick_reply, "payload": "SUBSCRIBED"}
-        ]
     resp = requests.post(
         f"{BASE_URL}/{ig_id}/messages",
         json={"recipient": {"id": recipient_id}, "message": message},
@@ -234,25 +207,11 @@ def get_comments(media_id, token):
     return comments
 
 
-def get_user_replies(ig_id, user_id, token):
-    """Retourne les messages envoyés PAR l'utilisateur dans notre conversation avec lui."""
-    resp = ig_get(
-        f"{ig_id}/conversations",
-        {"user_id": user_id, "fields": "id,messages{message,from,created_time}"},
-        token,
-    )
-    convs = resp.get("data", [])
-    if not convs:
-        return []
-    all_msgs = convs[0].get("messages", {}).get("data", [])
-    return [m for m in all_msgs if m.get("from", {}).get("id") != ig_id]
-
-
 # ── Bot logic ──────────────────────────────────────────────────────────────────
 def scan_comments(ig_id, token, state, dry_run):
     """
-    Étape 1 — parcourt les commentaires récents, détecte le mot-clé "coaching"
-    et envoie MSG_1 aux nouveaux commentateurs.
+    Parcourt les commentaires récents, détecte le mot-clé "coaching"
+    et envoie directement MSG_2 (le lien) aux nouveaux commentateurs.
     """
     count = 0
     posts = get_recent_posts(ig_id, token)
@@ -291,69 +250,17 @@ def scan_comments(ig_id, token, state, dry_run):
             else:
                 logging.warning("Erreur réponse commentaire → @%s : %s", username, reply.get("error", reply))
 
-            result = ig_post_msg(
-                ig_id, user_id, MSG_1_TEXT.format(username=username), token, dry_run,
-                quick_reply=MSG_1_QUICK_REPLY,
+            result = ig_post_url_button(
+                ig_id, user_id, MSG_2_TEXT, MSG_2_BUTTON_TITLE, MSG_2_BUTTON_URL, token, dry_run
             )
             state["processed_comments"][cid] = now_iso
             if "message_id" in result:
-                state["pending_follow"][user_id] = {"username": username, "sent_at": now_iso}
+                state["sent_msg2"][user_id] = now_iso
                 count += 1
-                logging.info("MSG_1 envoyé → @%s", username)
+                logging.info("MSG_2 envoyé → @%s", username)
             else:
                 err = result.get("error", result)
-                logging.warning("Erreur MSG_1 → @%s : %s", username, err)
-
-    return count
-
-
-def check_replies(ig_id, token, state, dry_run):
-    """
-    Étape 2 — vérifie si les utilisateurs en attente ont répondu
-    "Je suis abonné(e)" et leur envoie MSG_2.
-    """
-    count = 0
-    confirmed = []
-
-    for user_id, info in state["pending_follow"].items():
-        username = info.get("username", "?")
-        try:
-            replies = get_user_replies(ig_id, user_id, token)
-        except Exception as exc:
-            logging.warning("Impossible de lire la conv de @%s : %s", username, exc)
-            continue
-
-        sent_at = _parse_time(info.get("sent_at", "2000-01-01T00:00:00+00:00"))
-        new_replies = [
-            m for m in replies
-            if _parse_time(m.get("created_time", "2000-01-01T00:00:00+00:00")) > sent_at
-        ]
-
-        if not new_replies:
-            continue
-
-        confirmed_follow = any(
-            any(kw in m.get("message", "").lower() for kw in SUBSCRIPTION_WORDS)
-            for m in new_replies
-        )
-        if not confirmed_follow:
-            logging.debug("@%s a répondu mais sans confirmation d'abonnement", username)
-            continue
-
-        result = ig_post_url_button(
-            ig_id, user_id, MSG_2_TEXT, MSG_2_BUTTON_TITLE, MSG_2_BUTTON_URL, token, dry_run
-        )
-        if "message_id" in result:
-            state["sent_msg2"][user_id] = datetime.now(timezone.utc).isoformat()
-            confirmed.append(user_id)
-            count += 1
-            logging.info("MSG_2 envoyé → @%s", username)
-        else:
-            err = result.get("error", result)
-            logging.warning("Erreur MSG_2 → @%s : %s", username, err)
-
-    for uid in confirmed:
-        state["pending_follow"].pop(uid, None)
+                logging.warning("Erreur MSG_2 → @%s : %s", username, err)
 
     return count
 
@@ -387,15 +294,11 @@ def main():
     if args.dry_run:
         logging.info("=== MODE DRY RUN — aucun DM ne sera envoyé ===")
 
-    n1 = scan_comments(ig_id, token, state, args.dry_run)
-    n2 = check_replies(ig_id, token, state, args.dry_run)
+    n2 = scan_comments(ig_id, token, state, args.dry_run)
 
     if not args.dry_run:
         save_state(state)
-    logging.info(
-        "Terminé. MSG1: %d | MSG2: %d | En attente confirmation: %d",
-        n1, n2, len(state["pending_follow"]),
-    )
+    logging.info("Terminé. MSG2 envoyés : %d", n2)
 
 
 if __name__ == "__main__":
