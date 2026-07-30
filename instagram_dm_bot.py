@@ -34,7 +34,7 @@ MSG_2_TEXT = (
     "à travailler régulièrement. Le but est de préparer la voix, mais aussi de la développer. "
     "Ma routine personnelle te donnera un bagage technique nécessaire pour aborder "
     "tous les répertoires et styles musicaux.\n\n"
-    "Bonne nouvelle, je te propose une réduction de 25 % cette méthode avec le code « GIFTEMILE »."
+    "Bonne nouvelle, je te propose une réduction de 30 % cette méthode avec le code « GIFTEMILE »."
 )
 MSG_2_BUTTON_TITLE = "Voir la méthode 👉"
 MSG_2_BUTTON_URL   = "https://emilecoachvocal.com/prépare-ta-voix"
