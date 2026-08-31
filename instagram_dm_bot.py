@@ -14,6 +14,7 @@ import argparse
 import logging
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+from urllib.parse import quote, urlsplit, urlunsplit
 
 import requests
 
@@ -126,8 +127,34 @@ def ig_post_msg(ig_id, recipient_id, text, token, dry_run=False):
     return resp.json()
 
 
+def normalize_web_url(url):
+    """Retourne une URL HTTP(S) ASCII, compatible avec les boutons Instagram."""
+    parts = urlsplit(url.strip())
+    if parts.scheme not in {"http", "https"} or not parts.netloc:
+        raise ValueError(f"URL de bouton invalide : {url!r}")
+
+    hostname = (parts.hostname or "").encode("idna").decode("ascii")
+    netloc = hostname
+    if parts.port:
+        netloc = f"{netloc}:{parts.port}"
+    if parts.username:
+        credentials = quote(parts.username, safe="")
+        if parts.password:
+            credentials += f":{quote(parts.password, safe='')}"
+        netloc = f"{credentials}@{netloc}"
+
+    return urlunsplit((
+        parts.scheme,
+        netloc,
+        quote(parts.path, safe="/%:@-._~!$&'()*+,;="),
+        quote(parts.query, safe="%=&?/:@-._~!$'()*+,;"),
+        quote(parts.fragment, safe="%?/:@-._~!$&'()*+,;="),
+    ))
+
+
 def ig_post_url_button(ig_id, recipient_id, text, button_title, button_url, token, dry_run=False):
     """Envoie un message avec un bouton URL (template button)."""
+    button_url = normalize_web_url(button_url)
     if dry_run:
         logging.info("[DRY RUN] DM button → %s : %s", recipient_id, button_url)
         return {"message_id": "dry_run"}
